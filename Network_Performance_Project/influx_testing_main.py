@@ -4,7 +4,7 @@ from influxdb_client import InfluxDBClient
 from datetime import datetime
 
 # InfluxDB Configuration
-os.environ['INFLUXDB_TOKEN'] = 'r-_t481dCecN28vh0AJ7UcgfbxuxLKNzJFlmxXSqtXbvuobcXqSSjYzzdYFACUjWYcHr8TKFKTfLlf1M97KbSw=='  # Make sure your token is properly set
+os.environ['INFLUXDB_TOKEN'] = ''  # Make sure your token is properly set
 token = os.environ.get("INFLUXDB_TOKEN")
 org = "self"
 url = "http://localhost:8086"
