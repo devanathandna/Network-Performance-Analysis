@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Packet Capture</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Dark mode styles */
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        button {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #333333;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0, 0, 0, 0.8); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #1e1e1e;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #ffffff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        canvas {
+            max-width: 100%; 
+            width: 50px; /* Set a fixed width */
+            height: 50px; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Packet Capture</h1>
+        <button id="start-btn" onclick="startCapture()">Start Capturing</button>
+        <button id="stop-btn" onclick="stopCapture()">Stop Capturing</button>
+        <button id="csv-write-btn" onclick="csvWrite()">Write Data to CSV</button>
+        <button id="predict-btn " onclick="showPredictions()">Show Predictions</button>
+        <p id="status"></p>
+
+        <!-- Inserted iframe -->
+        <iframe src="http://localhost:3000/d/fe4809qk07q4ga/network-latency-over-time?from=now-5m&to=now&timezone=browser&refresh=5s&kiosk" width="1350" height="600" frameborder="0"></iframe>
+    </div>
+
+    <!-- Modal for Predictions -->
+    <div id="predictionModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Predictions</h2>
+            <canvas id="latency-chart" width="50" height="50"></canvas>
+            <canvas id="isolation-forest-chart" width="50" height="50"></canvas>
+            <canvas id="svm-chart" width="50" height="50"></canvas>
+        </div>
+    </div>
+
+    <script>
+        function startCapture() {
+            $.post("/start_capture", function(data) {
+                $("#status").text(data.message);
+            });
+        }
+
+        function stopCapture() {
+            $.post("/stop_capture", function(data) {
+                $("#status").text(data.message);
+            });
+        }
+
+        function csvWrite() {
+            $.post("/csv_write", function(data) {
+                $("#status").text(data.status);
+            });
+        }
+
+        function showPredictions() {
+            // Fetch predictions from the server
+            $.get("/get_predictions", function(data) {
+                // Check if data is not empty and contains predictions
+                if (data) {
+                    createLatencyChart(data.latency_predictions); // Corrected here
+                    createIsolationForestChart(data.isolation_forest_predictions);
+                    createSVMChart(data.svm_predictions);
+
+                    // Show the modal
+                    $("#predictionModal").css("display", "block");
+                } else {
+                    $("#predictions-content").html("<p>No predictions available.</p>");
+                }
+            }).fail(function() {
+                $("#predictions-content").html("<p>Error fetching predictions.</p>");
+            });
+        }
+
+        function createLatencyChart(latencyPredictions) {
+            const ctx = document.getElementById('latency-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [...Array(latencyPredictions.length).keys()],
+                    datasets: [{
+                        label: 'Latency Predictions',
+                        data: latencyPredictions,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function createIsolationForestChart(isolationForestPredictions) {
+            const ctx = document.getElementById('isolation-forest-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Critical', 'Normal'],
+                    datasets: [{
+                        label: 'Isolation Forest Predictions',
+                        data: [
+                            isolationForestPredictions.filter(pred => pred === -1).length,
+                            isolationForestPredictions.filter(pred => pred === 1).length
+                        ],
+                        backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)'],
+                        borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Isolation Forest Predictions'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createSVMChart(svmPredictions) {
+            const ctx = document.getElementById('svm-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Anomaly', 'Normal'],
+                    datasets: [{
+                        label: 'SVM Predictions',
+                        data: [
+                            svmPredictions.filter(pred => pred === -1).length,
+                            svmPredictions.filter(pred => pred === 1).length
+                        ],
+                        backgroundColor: ['rgba(255, 206, 86, 0.2)', 'rgba(75, 192, 192, 0.2)'],
+                        borderColor: ['rgba( 255, 206, 86, 1)', 'rgba(75, 192, 192, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'SVM Predictions'
+                        }
+                    }
+                }
+            });
+        }
+
+        function closeModal() {
+            $("#predictionModal").css("display", "none");
+        }
+
+        // Close the modal when clicking outside of it
+        $(window).click(function(event) {
+            if ($(event.target).is("#predictionModal")) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
